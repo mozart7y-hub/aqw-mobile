@@ -1,44 +1,73 @@
-name: AQW 60FPS Compile Test
+name: AQW SWF Framerate Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  compile:
+  inspect-framerate:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout my fork
         uses: actions/checkout@v4
 
-      - name: Setup AIR SDK
-        uses: joshtynjala/setup-adobe-air-action@v2
-        with:
-          air-version: "51.3.1"
-          accept-license: yes
-
-      - name: Show AIR compiler tools
+      - name: Download AQW Pocket v3.3.6 armv8
         run: |
-          which mxmlc || true
-          which amxmlc || true
-          mxmlc -version || true
-          amxmlc -version || true
+          curl -L \
+            "https://github.com/anthony-hyo/aqw-mobile/releases/download/v3.3.6/AQWPocket-v3.3.6-armv8.apk" \
+            -o AQWPocket.apk
 
-      - name: Compile modified Mobile.swf
+      - name: Extract APK
         run: |
-          mxmlc \
-            -source-path+=loader/src \
-            -library-path+=loader/libs \
-            -output=loader/Mobile-60fps.swf \
-            loader/src/Pocket.as
+          mkdir extracted-apk
+          unzip -q AQWPocket.apk -d extracted-apk
 
-      - name: Verify compiled SWF
+      - name: Read Mobile.swf framerate
         run: |
-          ls -lh loader/Mobile-60fps.swf
-          file loader/Mobile-60fps.swf
+          python3 - <<'PY'
+          import zlib
+          from pathlib import Path
 
-      - name: Upload compiled SWF
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mobile-60fps-test
-          path: loader/Mobile-60fps.swf
+          path = Path("extracted-apk/assets/Mobile.swf")
+          raw = path.read_bytes()
+
+          signature = raw[:3]
+          version = raw[3]
+          declared_length = int.from_bytes(raw[4:8], "little")
+
+          if signature == b"CWS":
+              body = zlib.decompress(raw[8:])
+          elif signature == b"FWS":
+              body = raw[8:]
+          else:
+              raise RuntimeError(
+                  f"Unsupported SWF signature: {signature!r}"
+              )
+
+          # SWF RECT begins immediately after the 8-byte SWF header.
+          # First 5 bits specify the number of bits used for each RECT value.
+          nbits = body[0] >> 3
+          rect_bits = 5 + (nbits * 4)
+          rect_bytes = (rect_bits + 7) // 8
+
+          # Immediately following RECT is the UI16 8.8 fixed-point frame rate.
+          rate_offset = rect_bytes
+          rate_raw = int.from_bytes(
+              body[rate_offset:rate_offset + 2],
+              "little"
+          )
+          frame_rate = rate_raw / 256.0
+
+          frame_count = int.from_bytes(
+              body[rate_offset + 2:rate_offset + 4],
+              "little"
+          )
+
+          print("=== MOBILE.SWF INFORMATION ===")
+          print(f"Signature: {signature.decode()}")
+          print(f"SWF version: {version}")
+          print(f"Declared length: {declared_length}")
+          print(f"Frame rate: {frame_rate}")
+          print(f"Frame count: {frame_count}")
+          print("================================")
+          PY
