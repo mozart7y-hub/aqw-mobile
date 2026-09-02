@@ -134,8 +134,14 @@ jobs:
                 uses: joshtynjala/setup-adobe-air-action@v2
                 with:
                     air-version: "51.3.1"
-                    accept-license: yes
-            
+                    accept-license: yes   
+            -    name: Compile modified Mobile.swf
+                 run: |
+                  mxmlc \
+                      -source-path+=loader/src \
+                      -library-path+=loader/libs \
+                      -output=loader/Mobile.swf \
+                      loader/src/Pocket.as
             -   name: Build APK
                 run: |
                     sed -i "s|<renderMode>.*</renderMode>|<renderMode>${{ matrix.render-mode }}</renderMode>|" loader/Mobile-app.xml
