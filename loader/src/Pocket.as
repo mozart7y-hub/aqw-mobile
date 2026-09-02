@@ -60,7 +60,7 @@
 
 		public function Pocket() {
 			NativeApplication.nativeApplication.systemIdleMode = SystemIdleMode.KEEP_AWAKE;
-
+            stage.frameRate = 60;
 			stage.color = 0x000000;
 
 			this.versionTxt.text = "Version " + Config.APP_VERSION;
