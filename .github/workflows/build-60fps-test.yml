@@ -11,7 +11,7 @@ jobs:
       - name: Checkout my fork
         uses: actions/checkout@v4
 
-      - - name: Download official AQW Pocket v3.3.6 armv8
+      - name: Download official AQW Pocket v3.3.6 armv8
         run: |
           curl -L \
             "https://github.com/anthony-hyo/aqw-mobile/releases/download/v3.3.6/AQWPocket-v3.3.6-armv8.apk" \
