@@ -1,0 +1,49 @@
+name: AQW 60FPS Prep Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout my fork
+        uses: actions/checkout@v4
+
+      - name: Download official AQW Pocket v2.11.2 armv8
+        run: |
+          curl -L \
+            "https://github.com/anthony-hyo/aqw-mobile/releases/download/v2.11.2/AQWPocket-v2.11.2-armv8.apk" \
+            -o AQWPocket-original.apk
+
+      - name: Verify APK downloaded
+        run: |
+          ls -lh AQWPocket-original.apk
+          sha256sum AQWPocket-original.apk
+
+      - name: Extract APK
+        run: |
+          mkdir extracted-apk
+          unzip -q AQWPocket-original.apk -d extracted-apk
+
+      - name: Find AQW SWF files
+        run: |
+          echo "=== SWF FILES INSIDE APK ==="
+          find extracted-apk -type f -iname "*.swf" | sort | tee swf-list.txt
+
+          echo ""
+          echo "=== LOOKING FOR IMPORTANT FILES ==="
+          find extracted-apk -type f \( \
+            -iname "Mobile.swf" -o \
+            -iname "game.swf" -o \
+            -iname "world-map.swf" -o \
+            -iname "book-of-lore.swf" -o \
+            -iname "character-select.swf" \
+          \) | sort
+
+      - name: Upload SWF file list
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqw-apk-swf-layout
+          path: swf-list.txt
