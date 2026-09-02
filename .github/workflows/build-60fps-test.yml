@@ -1,196 +1,90 @@
-name: Build AQW Pocket 60FPS Test APK
+name: Inspect AQW SWF Framerates
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-60fps:
+  inspect-all-swfs:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout my fork
         uses: actions/checkout@v4
 
-      - name: Download official v3.3.6 armv8 APK
+      - name: Download AQW Pocket v3.3.6 armv8
         run: |
           curl -L \
             "https://github.com/anthony-hyo/aqw-mobile/releases/download/v3.3.6/AQWPocket-v3.3.6-armv8.apk" \
-            -o official.apk
+            -o AQWPocket.apk
 
-      - name: Extract official APK
+      - name: Extract APK
         run: |
-          mkdir official
-          unzip -q official.apk -d official
+          mkdir extracted-apk
+          unzip -q AQWPocket.apk -d extracted-apk
 
-      - name: Copy official patched game files
-        run: |
-          mkdir -p loader/gamefiles
-
-          cp official/assets/gamefiles/game.swf \
-             loader/gamefiles/game.swf
-
-          cp official/assets/gamefiles/world-map.swf \
-             loader/gamefiles/world-map.swf
-
-          cp official/assets/gamefiles/book-of-lore.swf \
-             loader/gamefiles/book-of-lore.swf
-
-          cp official/assets/gamefiles/character-select.swf \
-             loader/gamefiles/character-select.swf
-
-          cp official/assets/Mobile.swf \
-             loader/Mobile.swf
-
-      - name: Patch Mobile.swf to 60 FPS
+      - name: Inspect all SWF framerates
         run: |
           python3 - <<'PY'
           import zlib
           from pathlib import Path
 
-          path = Path("loader/Mobile.swf")
-          raw = path.read_bytes()
+          files = [
+              Path("extracted-apk/assets/Mobile.swf"),
+              Path("extracted-apk/assets/gamefiles/game.swf"),
+              Path("extracted-apk/assets/gamefiles/world-map.swf"),
+              Path("extracted-apk/assets/gamefiles/book-of-lore.swf"),
+              Path("extracted-apk/assets/gamefiles/character-select.swf"),
+          ]
 
-          signature = raw[:3]
-          version = raw[3]
-          declared_length = int.from_bytes(raw[4:8], "little")
+          def read_swf(path):
+              raw = path.read_bytes()
+              signature = raw[:3]
 
-          if signature == b"CWS":
-              body = bytearray(zlib.decompress(raw[8:]))
-          elif signature == b"FWS":
-              body = bytearray(raw[8:])
-          else:
-              raise RuntimeError(
-                  f"Unsupported SWF signature: {signature!r}"
+              if signature == b"CWS":
+                  body = zlib.decompress(raw[8:])
+              elif signature == b"FWS":
+                  body = raw[8:]
+              else:
+                  return {
+                      "signature": signature.decode(
+                          errors="replace"
+                      ),
+                      "fps": "Unsupported",
+                      "frames": "?"
+                  }
+
+              nbits = body[0] >> 3
+              rect_bits = 5 + (nbits * 4)
+              rect_bytes = (rect_bits + 7) // 8
+
+              fps_raw = int.from_bytes(
+                  body[rect_bytes:rect_bytes + 2],
+                  "little"
               )
 
-          nbits = body[0] >> 3
-          rect_bits = 5 + (nbits * 4)
-          rect_bytes = (rect_bits + 7) // 8
-
-          old_raw = int.from_bytes(
-              body[rect_bytes:rect_bytes + 2], "little"
-          )
-          old_rate = old_raw / 256.0
-
-          print(f"Original FPS: {old_rate}")
-
-          if old_rate != 30.0:
-              raise RuntimeError(
-                  f"Expected 30 FPS, found {old_rate}"
+              frame_count = int.from_bytes(
+                  body[rect_bytes + 2:rect_bytes + 4],
+                  "little"
               )
 
-          new_raw = int(60 * 256)
+              return {
+                  "signature": signature.decode(),
+                  "fps": fps_raw / 256.0,
+                  "frames": frame_count
+              }
 
-          body[rect_bytes:rect_bytes + 2] = \
-              new_raw.to_bytes(2, "little")
+          print("")
+          print("========== AQW SWF FPS RESULTS ==========")
 
-          if signature == b"CWS":
-              patched = (
-                  b"CWS"
-                  + bytes([version])
-                  + declared_length.to_bytes(4, "little")
-                  + zlib.compress(bytes(body), 9)
-              )
-          else:
-              patched = (
-                  b"FWS"
-                  + bytes([version])
-                  + declared_length.to_bytes(4, "little")
-                  + bytes(body)
-              )
+          for path in files:
+              info = read_swf(path)
 
-          path.write_bytes(patched)
-          print("Patched Mobile.swf to 60 FPS")
+              print("")
+              print(f"FILE: {path.name}")
+              print(f"Compression: {info['signature']}")
+              print(f"Frame rate: {info['fps']}")
+              print(f"Frame count: {info['frames']}")
+
+          print("")
+          print("=========================================")
           PY
-
-      - name: Verify 60 FPS
-        run: |
-          python3 - <<'PY'
-          import zlib
-          from pathlib import Path
-
-          raw = Path("loader/Mobile.swf").read_bytes()
-
-          if raw[:3] == b"CWS":
-              body = zlib.decompress(raw[8:])
-          else:
-              body = raw[8:]
-
-          nbits = body[0] >> 3
-          rect_bytes = (5 + nbits * 4 + 7) // 8
-
-          rate = int.from_bytes(
-              body[rect_bytes:rect_bytes + 2],
-              "little"
-          ) / 256
-
-          print(f"Final Mobile.swf FPS: {rate}")
-
-          if rate != 60.0:
-              raise RuntimeError("60 FPS verification failed")
-          PY
-
-      - name: Prepare test app descriptor
-        run: |
-          sed -i \
-            's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test</id>|' \
-            loader/Mobile-app.xml
-
-          sed -i \
-            's|<versionNumber>.*</versionNumber>|<versionNumber>3.3.6</versionNumber>|' \
-            loader/Mobile-app.xml
-
-          sed -i \
-            's|<versionLabel>.*</versionLabel>|<versionLabel>3.3.6-60fps-test</versionLabel>|' \
-            loader/Mobile-app.xml
-
-      - name: Setup AIR SDK
-        uses: joshtynjala/setup-adobe-air-action@v2
-        with:
-          air-version: "51.3.1"
-          accept-license: yes
-
-      - name: Create test signing certificate
-        run: |
-          adt -certificate \
-            -cn "AQW Pocket 60FPS Test" \
-            -ou "Test Build" \
-            -o "Personal" \
-            -c AU \
-            2048-RSA \
-            test-cert.p12 \
-            aqw60fps
-
-      - name: Build armv8 60FPS APK
-        run: |
-          adt -package \
-            -target apk-captive-runtime \
-            -arch armv8 \
-            -storetype PKCS12 \
-            -keystore test-cert.p12 \
-            -storepass aqw60fps \
-            AQWPocket-v3.3.6-60FPS-armv8.apk \
-            loader/Mobile-app.xml \
-            -C loader \
-              Mobile.swf \
-              icons/icon-36x36.png \
-              icons/icon-48x48.png \
-              icons/icon-72x72.png \
-              icons/icon-96x96.png \
-              icons/icon-144x144.png \
-              icons/icon-192x192.png \
-              gamefiles/game.swf \
-              gamefiles/world-map.swf \
-              gamefiles/book-of-lore.swf \
-              gamefiles/character-select.swf
-
-      - name: Show APK
-        run: |
-          ls -lh AQWPocket-v3.3.6-60FPS-armv8.apk
-          sha256sum AQWPocket-v3.3.6-60FPS-armv8.apk
-
-      - name: Upload 60FPS APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: AQWPocket-v3.3.6-60FPS-armv8
-          path: AQWPocket-v3.3.6-60FPS-armv8.apk
