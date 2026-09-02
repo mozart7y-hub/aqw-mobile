@@ -1,49 +1,44 @@
-name: AQW 60FPS Prep Test
+name: AQW 60FPS Compile Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect-apk:
+  compile:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout my fork
         uses: actions/checkout@v4
 
-      - name: Download official AQW Pocket v3.3.6 armv8
+      - name: Setup AIR SDK
+        uses: joshtynjala/setup-adobe-air-action@v2
+        with:
+          air-version: "51.3.1"
+          accept-license: yes
+
+      - name: Show AIR compiler tools
         run: |
-          curl -L \
-            "https://github.com/anthony-hyo/aqw-mobile/releases/download/v3.3.6/AQWPocket-v3.3.6-armv8.apk" \
-            -o AQWPocket-original.apk
+          which mxmlc || true
+          which amxmlc || true
+          mxmlc -version || true
+          amxmlc -version || true
 
-      - name: Verify APK downloaded
+      - name: Compile modified Mobile.swf
         run: |
-          ls -lh AQWPocket-original.apk
-          sha256sum AQWPocket-original.apk
+          mxmlc \
+            -source-path+=loader/src \
+            -library-path+=loader/libs \
+            -output=loader/Mobile-60fps.swf \
+            loader/src/Pocket.as
 
-      - name: Extract APK
+      - name: Verify compiled SWF
         run: |
-          mkdir extracted-apk
-          unzip -q AQWPocket-original.apk -d extracted-apk
+          ls -lh loader/Mobile-60fps.swf
+          file loader/Mobile-60fps.swf
 
-      - name: Find AQW SWF files
-        run: |
-          echo "=== SWF FILES INSIDE APK ==="
-          find extracted-apk -type f -iname "*.swf" | sort | tee swf-list.txt
-
-          echo ""
-          echo "=== LOOKING FOR IMPORTANT FILES ==="
-          find extracted-apk -type f \( \
-            -iname "Mobile.swf" -o \
-            -iname "game.swf" -o \
-            -iname "world-map.swf" -o \
-            -iname "book-of-lore.swf" -o \
-            -iname "character-select.swf" \
-          \) | sort
-
-      - name: Upload SWF file list
+      - name: Upload compiled SWF
         uses: actions/upload-artifact@v4
         with:
-          name: aqw-apk-swf-layout
-          path: swf-list.txt
+          name: Mobile-60fps-test
+          path: loader/Mobile-60fps.swf
