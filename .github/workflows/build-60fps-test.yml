@@ -1,10 +1,10 @@
-name: Build AQW Pocket 60FPS Test 2
+name: Build AQW Pocket 60FPS Test 3 Direct
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-60fps-test2:
+  build-60fps-test3:
     runs-on: ubuntu-latest
 
     steps:
@@ -172,8 +172,27 @@ jobs:
           print("60 FPS verification passed.")
           PY
 
-      - name: Prepare Test 2 app descriptor
-        run: |
+            - name: Prepare Test 3 Direct app descriptor
+          run: |
+          sed -i \
+            's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test3</id>|' \
+            loader/Mobile-app.xml
+
+          sed -i \
+            's|<versionNumber>.*</versionNumber>|<versionNumber>3.3.6</versionNumber>|' \
+            loader/Mobile-app.xml
+
+          sed -i \
+            's|<versionLabel>.*</versionLabel>|<versionLabel>3.3.6-60fps-test3-direct</versionLabel>|' \
+            loader/Mobile-app.xml
+
+          sed -i \
+            's|<renderMode>auto</renderMode>|<renderMode>direct</renderMode>|' \
+            loader/Mobile-app.xml
+
+          echo "=== TEST 3 DESCRIPTOR ==="
+          grep -E "<id>|<versionLabel>|<renderMode>" \
+            loader/Mobile-app.xml
           sed -i \
             's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test2</id>|' \
             loader/Mobile-app.xml
@@ -229,13 +248,13 @@ jobs:
       - name: Show APK information
         run: |
           ls -lh \
-            AQWPocket-v3.3.6-60FPS-Test2-armv8.apk
+            AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
 
           sha256sum \
-            AQWPocket-v3.3.6-60FPS-Test2-armv8.apk
+            AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
 
-      - name: Upload Test 2 APK
+      - name: Upload Test 3 direct
         uses: actions/upload-artifact@v4
         with:
-          name: AQWPocket-v3.3.6-60FPS-Test2-armv8
-          path: AQWPocket-v3.3.6-60FPS-Test2-armv8.apk
+          name: AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8
+          path: AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
