@@ -26,20 +26,11 @@ jobs:
         run: |
           mkdir -p loader/gamefiles
 
-          cp official/assets/Mobile.swf \
-             loader/Mobile.swf
-
-          cp official/assets/gamefiles/game.swf \
-             loader/gamefiles/game.swf
-
-          cp official/assets/gamefiles/world-map.swf \
-             loader/gamefiles/world-map.swf
-
-          cp official/assets/gamefiles/book-of-lore.swf \
-             loader/gamefiles/book-of-lore.swf
-
-          cp official/assets/gamefiles/character-select.swf \
-             loader/gamefiles/character-select.swf
+          cp official/assets/Mobile.swf loader/Mobile.swf
+          cp official/assets/gamefiles/game.swf loader/gamefiles/game.swf
+          cp official/assets/gamefiles/world-map.swf loader/gamefiles/world-map.swf
+          cp official/assets/gamefiles/book-of-lore.swf loader/gamefiles/book-of-lore.swf
+          cp official/assets/gamefiles/character-select.swf loader/gamefiles/character-select.swf
 
       - name: Patch Mobile and game SWFs to 60 FPS
         run: |
@@ -52,77 +43,54 @@ jobs:
               (Path("loader/gamefiles/game.swf"), 24.0),
           ]
 
-          def patch_swf(path, expected_fps):
+          for path, expected in targets:
               raw = path.read_bytes()
 
               signature = raw[:3]
               version = raw[3]
-              declared_length = int.from_bytes(
-                  raw[4:8], "little"
-              )
+              declared_length = int.from_bytes(raw[4:8], "little")
 
               if signature == b"CWS":
-                  body = bytearray(
-                      zlib.decompress(raw[8:])
-                  )
+                  body = bytearray(zlib.decompress(raw[8:]))
               elif signature == b"FWS":
                   body = bytearray(raw[8:])
               else:
-                  raise RuntimeError(
-                      f"{path}: unsupported SWF "
-                      f"signature {signature!r}"
-                  )
+                  raise RuntimeError(f"Unsupported SWF: {path}")
 
               nbits = body[0] >> 3
-              rect_bits = 5 + (nbits * 4)
-              rect_bytes = (rect_bits + 7) // 8
+              rect_bytes = (5 + nbits * 4 + 7) // 8
 
-              old_raw = int.from_bytes(
+              old_fps = int.from_bytes(
                   body[rect_bytes:rect_bytes + 2],
                   "little"
-              )
-              old_fps = old_raw / 256.0
+              ) / 256.0
 
-              print(
-                  f"{path.name}: "
-                  f"{old_fps} FPS -> 60 FPS"
-              )
+              print(f"{path.name}: {old_fps} FPS -> 60 FPS")
 
-              if old_fps != expected_fps:
+              if old_fps != expected:
                   raise RuntimeError(
-                      f"{path.name}: expected "
-                      f"{expected_fps}, found {old_fps}"
+                      f"{path.name}: expected {expected}, found {old_fps}"
                   )
 
-              new_raw = int(60.0 * 256)
-
-              body[
-                  rect_bytes:rect_bytes + 2
-              ] = new_raw.to_bytes(2, "little")
+              body[rect_bytes:rect_bytes + 2] = \
+                  int(60 * 256).to_bytes(2, "little")
 
               if signature == b"CWS":
                   patched = (
                       b"CWS"
                       + bytes([version])
-                      + declared_length.to_bytes(
-                          4, "little"
-                      )
+                      + declared_length.to_bytes(4, "little")
                       + zlib.compress(bytes(body), 9)
                   )
               else:
                   patched = (
                       b"FWS"
                       + bytes([version])
-                      + declared_length.to_bytes(
-                          4, "little"
-                      )
+                      + declared_length.to_bytes(4, "little")
                       + bytes(body)
                   )
 
               path.write_bytes(patched)
-
-          for path, expected in targets:
-              patch_swf(path, expected)
 
           print("Both SWFs patched successfully.")
           PY
@@ -133,12 +101,10 @@ jobs:
           import zlib
           from pathlib import Path
 
-          files = [
+          for path in [
               Path("loader/Mobile.swf"),
               Path("loader/gamefiles/game.swf"),
-          ]
-
-          for path in files:
+          ]:
               raw = path.read_bytes()
 
               if raw[:3] == b"CWS":
@@ -146,19 +112,13 @@ jobs:
               elif raw[:3] == b"FWS":
                   body = raw[8:]
               else:
-                  raise RuntimeError(
-                      f"Unsupported SWF: {path}"
-                  )
+                  raise RuntimeError(f"Unsupported SWF: {path}")
 
               nbits = body[0] >> 3
-              rect_bytes = (
-                  5 + (nbits * 4) + 7
-              ) // 8
+              rect_bytes = (5 + nbits * 4 + 7) // 8
 
               fps = int.from_bytes(
-                  body[
-                      rect_bytes:rect_bytes + 2
-                  ],
+                  body[rect_bytes:rect_bytes + 2],
                   "little"
               ) / 256.0
 
@@ -171,27 +131,38 @@ jobs:
 
           print("60 FPS verification passed.")
           PY
-          - name: Prepare Test 3 Direct app descriptor
-          run: |
-                    sed -i \
-            's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test3</id>|' \
-            loader/Mobile-app.xml
 
-          sed -i \
-            's|<versionNumber>.*</versionNumber>|<versionNumber>3.3.6</versionNumber>|' \
-            loader/Mobile-app.xml
+      - name: Prepare Test 3 Direct app descriptor
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
 
-          sed -i \
-            's|<versionLabel>.*</versionLabel>|<versionLabel>3.3.6-60fps-test3-direct</versionLabel>|' \
-            loader/Mobile-app.xml
+          path = Path("loader/Mobile-app.xml")
+          text = path.read_text()
 
-          sed -i \
-            's|<renderMode>auto</renderMode>|<renderMode>direct</renderMode>|' \
-            loader/Mobile-app.xml
+          text = text.replace(
+              "<id>com.aqw.pocket</id>",
+              "<id>com.aqw.pocket60test3</id>"
+          )
 
-                    echo "=== TEST 3 DESCRIPTOR ==="
-          grep -E "<id>|<versionLabel>|<renderMode>" \
-            loader/Mobile-app.xml
+          text = text.replace(
+              "<renderMode>auto</renderMode>",
+              "<renderMode>direct</renderMode>"
+          )
+
+          path.write_text(text)
+
+          print("=== TEST 3 DESCRIPTOR ===")
+
+          for line in text.splitlines():
+              if (
+                  "<id>" in line
+                  or "<versionLabel>" in line
+                  or "<renderMode>" in line
+              ):
+                  print(line.strip())
+          PY
+
       - name: Setup AIR SDK
         uses: joshtynjala/setup-adobe-air-action@v2
         with:
@@ -209,7 +180,7 @@ jobs:
             test-cert.p12 \
             aqw60fps
 
-      - name: Build armv8 Test 3 direct
+      - name: Build armv8 Test 3 Direct APK
         run: |
           adt -package \
             -target apk-captive-runtime \
@@ -217,7 +188,7 @@ jobs:
             -storetype PKCS12 \
             -keystore test-cert.p12 \
             -storepass aqw60fps \
-            AQWPocket-v3.3.6-60FPS-Test2-armv8.apk \
+            AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk \
             loader/Mobile-app.xml \
             -C loader \
               Mobile.swf \
@@ -234,13 +205,10 @@ jobs:
 
       - name: Show APK information
         run: |
-          ls -lh \
-            AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
+          ls -lh AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
+          sha256sum AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
 
-          sha256sum \
-            AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8.apk
-
-      - name: Upload Test 3 direct
+      - name: Upload Test 3 Direct APK
         uses: actions/upload-artifact@v4
         with:
           name: AQWPocket-v3.3.6-60FPS-Test3-Direct-armv8
