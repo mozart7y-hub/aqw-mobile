@@ -173,7 +173,7 @@ jobs:
           PY
           - name: Prepare Test 3 Direct app descriptor
           run: |
-          sed -i \
+                    sed -i \
             's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test3</id>|' \
             loader/Mobile-app.xml
 
@@ -189,21 +189,9 @@ jobs:
             's|<renderMode>auto</renderMode>|<renderMode>direct</renderMode>|' \
             loader/Mobile-app.xml
 
-          echo "=== TEST 3 DESCRIPTOR ==="
+                    echo "=== TEST 3 DESCRIPTOR ==="
           grep -E "<id>|<versionLabel>|<renderMode>" \
             loader/Mobile-app.xml
-          sed -i \
-            's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test2</id>|' \
-            loader/Mobile-app.xml
-
-          sed -i \
-            's|<versionNumber>.*</versionNumber>|<versionNumber>3.3.6</versionNumber>|' \
-            loader/Mobile-app.xml
-
-          sed -i \
-            's|<versionLabel>.*</versionLabel>|<versionLabel>3.3.6-60fps-test2</versionLabel>|' \
-            loader/Mobile-app.xml
-
       - name: Setup AIR SDK
         uses: joshtynjala/setup-adobe-air-action@v2
         with:
@@ -213,7 +201,7 @@ jobs:
       - name: Create test signing certificate
         run: |
           adt -certificate \
-            -cn "AQW Pocket 60FPS Test 2" \
+            -cn "AQW Pocket 60FPS Test 3" \
             -ou "Test Build" \
             -o "Personal" \
             -c AU \
@@ -221,7 +209,7 @@ jobs:
             test-cert.p12 \
             aqw60fps
 
-      - name: Build armv8 Test 2 APK
+      - name: Build armv8 Test 3 direct
         run: |
           adt -package \
             -target apk-captive-runtime \
