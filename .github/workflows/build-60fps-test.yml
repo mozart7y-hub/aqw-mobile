@@ -171,8 +171,7 @@ jobs:
 
           print("60 FPS verification passed.")
           PY
-
-            - name: Prepare Test 3 Direct app descriptor
+          - name: Prepare Test 3 Direct app descriptor
           run: |
           sed -i \
             's|<id>com.aqw.pocket</id>|<id>com.aqw.pocket60test3</id>|' \
